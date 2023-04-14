@@ -20,5 +20,35 @@ As mentioned in the task, now you can run in the terminal or powershell the foll
  The above command is for a already opened notepad which is being monitored with a frequency of 1 miunute for a maximum of 2 minutes.
  After the maximum minitor time of 2 minutes, the process notepad will be killed and a log file will be generated.
  
+ ProcessMonitor.exe and respective logfile were already included from the previous run just for an example.
+ 
  
  # testTask.Tests
+
+There are a total of 6 tests written using Nunit framework
+
+- Monitor_ProcessExistsAndMaxLifetimeExceeded_KillsProcessAndLogs
+    For this test to pass, a process(notepad) should already be opened an exceeded its lifetime
+    which is when the process will be killed instantly and a logfile will be generated in the directory.
+    
+- Monitor_ProcessDoesNotExist_DoesNotKillProcess
+    checks for a prcoess when there is none, doesn't kill anything or doesn't log anything
+
+- Monitor_ProcessExistsAndMaxLifetimeNotExceeded_DoesNotKillProcess    
+    Starts a new process and checks for the runtime when not exceeded, it doesn't kill the process and keeps on running.
+    
+- Monitor_ProcessIsCancelled_StopsProcessMonitor
+     Checks whether the process will be killed when a cancellation token is given
+     
+- Monitor_ProcessExistsAndMaxLifetimeNotExceeded_DoesNotKillProcessOrLog
+    Process already exists, checks for lifetime, when not exceeds, doesn't kills or logs
+    
+- Monitor_ProcessNotFound_LogsProcessNotFound
+    Checks for the process, runs for the maximumlifetime when no process i found, stops monitoring but not logs anything
+
+
+
+
+
+
+
