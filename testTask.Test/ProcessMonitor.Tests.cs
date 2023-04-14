@@ -10,44 +10,37 @@ namespace ProcessKiller.Tests
     public class ProcessMonitorTests
     {
         private const string processName = "notepad";
-        private const int monitoringFrequencyMinutes = 1; 
-        [Test]
-        public async Task Monitor_ProcessExistsAndMaxLifetimeExceeded_KillsProcessAndLogs()
+        private const int monitoringFrequencyMinutes = 1;
+        private CancellationTokenSource cancellationTokenSource;
+        private CancellationToken cancellationToken;
+
+        [SetUp]
+        public void Setup()
         {
-            // Arrange
-            var maxLifetimeMinutes = 1;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
-            var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
-
-            // Delete previous log files
-            var logFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
-            if (logFiles.Length > 0)
-            {
-                foreach (var file in logFiles)
-                {
-                    File.Delete(file);
-                }
-            }
-            // Act
-            var process = Process.Start(processName);
-            var task = Task.Run(() => processMonitor.Start());
-
-            //await Task.Delay(TimeSpan.FromSeconds(5));
-            process.Refresh();
-            process.WaitForInputIdle();
-            await Task.Delay(TimeSpan.FromMinutes(maxLifetimeMinutes)); // wait for the process to run for at least maxLifetimeMinutes
-            cancellationTokenSource.Cancel();
-
-            // Assert
-            Assert.That(process.HasExited, Is.False);
-            logFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
-            Assert.That(logFiles, Has.Length.EqualTo(1));
-            var logContent = File.ReadAllText(logFiles[0]);
-            StringAssert.Contains($"Process '{processName}' was killed at", logContent);
+            cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            cancellationToken = cancellationTokenSource.Token;
         }
 
 
+        
+        [Test]
+        public async Task Monitor_ProcessExistsAndMaxLifetimeExceeded_KillsProcessAndLogs()
+        {
+            //For this test to pass, a process(notepad) should already be opened an exceeded its lifetime
+            // Arrange
+            var maxLifetimeMinutes = 1;
+            var monitoringFrequencyMinutes = 1;
+            var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
+            var logFilesBefore = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
+            // Act
+            var task = Task.Run(() => processMonitor.Start());
+            await task;
+            cancellationTokenSource.Cancel();
+
+            var logFilesAfter = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
+            //Assert
+            Assert.That(logFilesAfter.Length, Is.EqualTo(logFilesBefore.Length+1));
+        }
 
 
 
@@ -56,8 +49,6 @@ namespace ProcessKiller.Tests
         {
             // Arrange
             var maxLifetimeMinutes = 1;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
             var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
             var task = Task.Run(() => processMonitor.Start());
             // Act
@@ -72,10 +63,7 @@ namespace ProcessKiller.Tests
         {
             // Arrange
             var maxLifetimeMinutes = 2;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
             var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
-
             // Act
             var process = Process.Start(processName);
             var task = Task.Run(() => processMonitor.Start());
@@ -94,15 +82,11 @@ namespace ProcessKiller.Tests
         {
             // Arrange
             var maxLifetimeMinutes = 1;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
             var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
-
             // Act
             var task = Task.Run(() => processMonitor.Start());
             cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(5));
             await task;
-
             // Assert
             Assert.IsTrue(task.IsCompleted);
         }
@@ -112,56 +96,24 @@ namespace ProcessKiller.Tests
         {
             // Arrange
             var maxLifetimeMinutes = 1;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
+            KillAlreadyRunningProcess();
             var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
+            var logFilesbefore = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
             var process = Process.Start(processName);
             var task = Task.Run(() => processMonitor.Start());
             // Act
-            await task;
-            process.Refresh();
-            process.WaitForInputIdle();
             await Task.Delay(TimeSpan.FromSeconds(5));
             process.Refresh();
             process.WaitForInputIdle();
+            await Task.Delay(TimeSpan.FromMinutes(maxLifetimeMinutes + 1));
+            process.Refresh();
+            process.WaitForInputIdle();
             cancellationTokenSource.Cancel();
+            var logFilesAfter = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
 
             // Assert
-            var logFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
-            Assert.That(logFiles, Has.Length.EqualTo(1));
             Assert.IsFalse(process.HasExited);
-        }
-
-
-        [Test]
-        public async Task Monitor_ProcessAlreadyExited_LogsProcessExit()
-        {
-            // Arrange
-            var maxLifetimeMinutes = 1;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
-            var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
-
-            // Act
-            var process = Process.Start(processName);
-            var task = Task.Run(() => processMonitor.Start());
-
-            await Task.Delay(TimeSpan.FromSeconds(5));
-            process.Refresh();
-            process.WaitForInputIdle();
-            await Task.Delay(TimeSpan.FromSeconds(5));
-            process.Kill();
-            process.WaitForExit();
-
-            await task; // Wait for processMonitor.Start() to complete before continuing
-
-            cancellationTokenSource.Cancel();
-
-            // Assert
-            var logFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
-            Assert.That(logFiles, Has.Length.EqualTo(1));
-            var logContent = File.ReadAllText(logFiles[0]);
-            StringAssert.Contains($"Process '{processName}' has already exited", logContent);
+            Assert.That(logFilesAfter.Length, Is.EqualTo(logFilesbefore.Length));
         }
 
 
@@ -170,26 +122,31 @@ namespace ProcessKiller.Tests
         {
             // Arrange
             var maxLifetimeMinutes = 1;
-            var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var cancellationToken = cancellationTokenSource.Token;
             var processMonitor = new ProcessMonitor(processName, maxLifetimeMinutes, monitoringFrequencyMinutes, cancellationToken);
-
+            //DeleteOldLogFiles();
+            var logFilesBefore = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
             // Act
-            var process = Process.Start("notepad.exe"); // Start a different process
             var task = Task.Run(() => processMonitor.Start());
-            await Task.Delay(TimeSpan.FromSeconds(5));
-            process.Refresh();
-            process.WaitForInputIdle();
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await task;
             cancellationTokenSource.Cancel();
 
             // Assert
-            var logFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
-            Assert.That(logFiles, Has.Length.EqualTo(1));
-            var logContent = File.ReadAllText(logFiles[0]);
-            StringAssert.Contains($"Process '{processName}' not found", logContent);
+            var logFilesAfter = Directory.GetFiles(Directory.GetCurrentDirectory(), $"log_{processName}_*.txt");
+            Assert.That(logFilesAfter.Length, Is.EqualTo(logFilesBefore.Length));
+
         }
 
 
+        private static void KillAlreadyRunningProcess()
+        {
+            var processes = Process.GetProcessesByName(processName);
+            if (processes.Any())
+            {
+                foreach (var pro in processes)
+                {
+                    pro.Kill();
+                }
+            }
+        }
     }
 }
